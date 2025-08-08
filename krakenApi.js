@@ -1,59 +1,10 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const qs = require('querystring');
+const qs =require('querystring');
+const fs = require('fs'); // Import the File System module
 
-// #############################
-// ## DeepSeek API Caller ##
-// #############################
-// Configuration
-const DEEPSEEK_API_KEY = 'sk-ae85860567f8462b95e774393dfb5dc3'; // <-- IMPORTANT: Replace with your key
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
-async function callDeepSeekAPI(prompt) {
-    if (DEEPSEEK_API_KEY === 'YOUR_DEEPSEEK_API_KEY') {
-        console.error("FATAL: DeepSeek API key is not set.");
-        // Return a "doNothing" command to prevent crashes in a live loop.
-        return JSON.stringify({ function: "doNothing", parameters: { reason: "AI not configured" } });
-    }
-    try {
-        const response = await fetch(DEEPSEEK_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: 'deepseek-chat',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.5, // Lower temperature for more deterministic, safer trading decisions
-                max_tokens: 1024
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}`);
-        }
-
-        const data = await response.json();
-        // Extracting only the JSON part, assuming the AI returns it in a code block or similar
-        const content = data.choices[0].message.content;
-        const jsonMatch = content.match(/```json\n([\s\S]*?)\n```|({[\s\S]*})/);
-        if (jsonMatch) {
-            return jsonMatch[1] || jsonMatch[2];
-        }
-        return content; // Fallback to returning the raw content
-    } catch (error) {
-        console.error('Error calling DeepSeek API:', error);
-        return null;
-    }
-}
-
-
-// #############################
-// ## Kraken Futures API Class ##
-// #############################
+// --- Paste the complete KrakenFuturesApi class here ---
 class KrakenFuturesApi {
-    // ... (The full class from your original code goes here) ...
     constructor(apiKey, apiSecret, baseUrl = 'https://futures.kraken.com') {
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
@@ -101,6 +52,7 @@ class KrakenFuturesApi {
             return response.data;
         } catch (error) {
             const errorMessage = error.response ? error.response.data : error.message;
+            // We still log errors to the console for immediate visibility
             console.error(`Error with ${method} ${endpoint}:`, JSON.stringify(errorMessage, null, 2));
             throw { endpoint: `${method} ${endpoint}`, error: errorMessage };
         }
@@ -108,15 +60,7 @@ class KrakenFuturesApi {
     getInstruments = () => this.request('GET', '/derivatives/api/v3/instruments');
     getTickers = () => this.request('GET', '/derivatives/api/v3/tickers');
     getOrderbook = (symbol) => this.request('GET', '/derivatives/api/v3/orderbook', { symbol });
-    // CORRECTED LINE
-getHistory = (symbol, lastTime) => {
-    const params = { symbol };
-    if (lastTime) {
-        params.lastTime = lastTime;
-    }
-    return this.request('GET', '/derivatives/api/v3/history', params);
-}
-    
+    getHistory = (symbol, lastTime) => this.request('GET', '/derivatives/api/v3/history', { symbol, lastTime });
     getAccounts = () => this.request('GET', '/derivatives/api/v3/accounts', {}, true);
     getOpenPositions = () => this.request('GET', '/derivatives/api/v3/openpositions', {}, true);
     getOpenOrders = () => this.request('GET', '/derivatives/api/v3/openorders', {}, true);
@@ -134,193 +78,88 @@ getHistory = (symbol, lastTime) => {
 }
 
 
-// #############################
-// ## The Main Trading Loop ##
-// #############################
+// #########################################
+// ## Comprehensive Test Runner with File Logging ##
+// #########################################
 
-class TradingBot {
-    constructor(apiKey, apiSecret, symbol, interval = 30000) {
-        this.api = new KrakenFuturesApi(apiKey, apiSecret);
-        this.symbol = symbol;
-        this.interval = interval; // Time in ms between decisions
-        this.conversationHistory = []; // Stores the AI's decisions and results
-        this.isRunning = false;
-    }
-
-    // Helper to format the conversation history for the prompt
-    formatHistory() {
-        if (this.conversationHistory.length === 0) {
-            return "This is the first decision in the session.";
-        }
-        return this.conversationHistory.map(turn =>
-            `AI Command: ${JSON.stringify(turn.command)}\nExecution Result: ${JSON.stringify(turn.result)}`
-        ).join('\n\n');
-    }
-
-    // The main prompt sent to the AI
-    constructPrompt(marketData) {
-        return `
-You are an expert crypto trading AI. Your primary objective is to strategically manage a futures trading portfolio on Kraken Futures to maximize its growth.
-
-You will be given the complete conversation history from this session, including your previous commands and their execution results. You will also receive fresh, real-time market data.
-
-Analyze all this information and decide on the single best action to take right now. Return your decision as a single, clean JSON object with no other text or explanation.
-
-<AVAILABLE_ACTIONS>
-- sendOrder: { "orderType": "lmt" | "mkt", "symbol": "${this.symbol}", "side": "buy" | "sell", "size": integer, "limitPrice": float }
-- editOrder: { "orderId": "string", "size": integer, "limitPrice": float }
-- cancelOrder: { "order_id": "string" }
-- cancelAllOrders: { "symbol": "${this.symbol}" }
-- doNothing: { "reason": "string" } // Use this if no action is warranted.
-</AVAILABLE_ACTIONS>
-
----
-**SESSION HISTORY (Your Previous Actions and Their Results):**
-${this.formatHistory()}
-
----
-**CURRENT MARKET AND ACCOUNT DATA (as of ${new Date().toISOString()}):**
-
-1. Account Balances:
-   ${JSON.stringify(marketData.accounts)}
-
-2. Current Open Positions:
-   ${JSON.stringify(marketData.openPositions)}
-
-3. Current Open Orders:
-   ${JSON.stringify(marketData.openOrders)}
-
-4. Market Data for Symbol (${this.symbol}):
-   - Ticker: ${JSON.stringify(marketData.ticker)}
-   - Order Book (Top 5 Levels): ${JSON.stringify(marketData.orderBook)}
-   - Recent Trades (Last 10): ${JSON.stringify(marketData.history)}
-
----
-**YOUR TASK:**
-
-Based on the session history and the latest data, what is the next logical action? Return your command as a JSON object.
-`;
-    }
-
-    async runDecisionCycle() {
-        console.log(`\n--- [${new Date().toLocaleTimeString()}] Starting new decision cycle ---`);
-
-        // 1. Gather all necessary data
-        console.log("Fetching latest market and account data...");
-        const [accounts, openPositions, openOrders, tickers, orderBookData, historyData] = await Promise.all([
-            this.api.getAccounts(),
-            this.api.getOpenPositions(),
-            this.api.getOpenOrders(),
-            this.api.getTickers(),
-            this.api.getOrderbook(this.symbol),
-            this.api.getHistory(this.symbol)
-        ]).catch(err => {
-            console.error("Failed to fetch critical data. Skipping cycle.", err);
-            return [];
-        });
-        
-        if (!accounts) return; // Exit cycle if data fetch failed
-
-        const marketData = {
-            accounts,
-            openPositions,
-            openOrders,
-            ticker: tickers.tickers.find(t => t.symbol === this.symbol),
-            orderBook: {
-                bids: orderBookData.bids.slice(0, 5),
-                asks: orderBookData.asks.slice(0, 5)
-            },
-            history: historyData.history.slice(0, 10)
-        };
-
-        // 2. Construct the prompt and get AI decision
-        console.log("Constructing prompt and querying AI...");
-        const prompt = this.constructPrompt(marketData);
-        const aiResponseString = await callDeepSeekAPI(prompt);
-
-        if (!aiResponseString) {
-            console.error("Failed to get a response from AI. Skipping cycle.");
-            return;
-        }
-
-        // 3. Parse and execute the decision
-        let decision;
-        try {
-            decision = JSON.parse(aiResponseString);
-        } catch (e) {
-            console.error("Failed to parse AI response into JSON. Response was:", aiResponseString);
-            this.conversationHistory.push({
-                command: { function: "parseError", parameters: {} },
-                result: { error: "Invalid JSON response from AI.", response: aiResponseString }
-            });
-            return;
-        }
-
-        console.log(`AI Decision: ${decision.function}`, decision.parameters || '');
-
-        let executionResult;
-        try {
-            switch (decision.function) {
-                case "sendOrder":
-                    executionResult = await this.api.sendOrder(decision.parameters);
-                    break;
-                case "editOrder":
-                    executionResult = await this.api.editOrder(decision.parameters);
-                    break;
-                case "cancelOrder":
-                    executionResult = await this.api.cancelOrder(decision.parameters);
-                    break;
-                case "cancelAllOrders":
-                    executionResult = await this.api.cancelAllOrders(decision.parameters.symbol);
-                    break;
-                case "doNothing":
-                    executionResult = { status: "success", reason: decision.parameters.reason };
-                    break;
-                default:
-                    throw new Error(`Unknown function '${decision.function}' received from AI.`);
-            }
-            console.log("Execution Result:", executionResult);
-        } catch (error) {
-            console.error("Error executing AI command:", error);
-            executionResult = { status: "error", details: error };
-        }
-
-        // 4. Update conversation history
-        this.conversationHistory.push({ command: decision, result: executionResult });
-    }
-
-    start() {
-        if (this.isRunning) {
-            console.log("Bot is already running.");
-            return;
-        }
-        console.log(`Starting trading bot for ${this.symbol}. Decision interval: ${this.interval / 1000}s.`);
-        this.isRunning = true;
-        // Run the first cycle immediately, then set the interval
-        this.runDecisionCycle().finally(() => {
-            setInterval(() => this.runDecisionCycle(), this.interval);
-        });
-    }
-}
-
-
-// #############################
-// ##      RUN THE BOT        ##
-// #############################
-
-function main() {
-    // --- CONFIGURATION ---
+async function main() {
+    // --- Configuration ---
     const KRAKEN_API_KEY = '2J/amVE61y0K0k34qVduE2fSiQTMpppw6Y+K+b+qt9zk7o+UvtBQTwBq';
-    const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU1jJwHK14LqFJq1T3FRj1Pdj/kk8zuhRiUJi';    const TRADEABLE_SYMBOL = 'pf_xbtusd'; // The symbol you want the bot to trade
-    const DECISION_INTERVAL_MS = 30000; // 30 seconds
+    const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU1jJwHK14LqFJq1T3FRj1Pdj/kk8zuhRiUJi';    const TRADEABLE_SYMBOL = 'pf_xbtusd';
+    const LOG_FILE = 'test-run-results.log'; // The file to write results to
 
-    if (KRAKEN_API_KEY === 'YOUR_KRAKEN_API_KEY' || KRAKEN_API_SECRET === 'YOUR_KRAKEN_API_SECRET') {
-        console.error("FATAL: Please replace 'YOUR_KRAKEN_API_KEY' and 'YOUR_KRAKEN_API_SECRET' in the script.");
+    if (KRAKEN_API_KEY === 'YOUR_API_KEY' || KRAKEN_API_SECRET === 'YOUR_API_SECRET') {
+        console.error("FATAL: Please replace 'YOUR_API_KEY' and 'YOUR_API_SECRET' in the script.");
         return;
     }
 
-    const bot = new TradingBot(KRAKEN_API_KEY, KRAKEN_API_SECRET, TRADEABLE_SYMBOL, DECISION_INTERVAL_MS);
-    bot.start();
+    // --- Initialize Log File ---
+    const startTime = new Date().toISOString();
+    fs.writeFileSync(LOG_FILE, `Comprehensive API Test Run - Started at: ${startTime}\n`);
+    console.log(`Test results will be written to ${LOG_FILE}`);
+
+    const api = new KrakenFuturesApi(KRAKEN_API_KEY, KRAKEN_API_SECRET);
+    let testOrderId = null;
+
+    // --- Helper function to run and log each test to a file ---
+    const runTest = async (name, fn) => {
+        const separator = '--------------------------------------------------\n';
+        let logContent = `${separator}--- Running test: ${name} ---\n${separator}`;
+        console.log(`Running test: ${name}...`); // Keep console output minimal
+
+        try {
+            const result = await fn();
+            logContent += `Success! Result:\n${JSON.stringify(result, null, 2)}\n\n`;
+            fs.appendFileSync(LOG_FILE, logContent);
+            return result;
+        } catch (e) {
+            logContent += `FAILED! Error:\n${JSON.stringify(e, null, 2)}\n\n`;
+            fs.appendFileSync(LOG_FILE, logContent);
+            console.error(`--- Test FAILED: ${name} (see ${LOG_FILE} for details) ---`);
+        }
+    };
+
+    // --- Execute All Tests ---
+    await runTest("getInstruments", () => api.getInstruments());
+    await runTest("getTickers", () => api.getTickers());
+    await runTest("getOrderbook", () => api.getOrderbook(TRADEABLE_SYMBOL));
+    await runTest("getHistory", () => api.getHistory(TRADEABLE_SYMBOL));
+    await runTest("getAccounts", () => api.getAccounts());
+    await runTest("getOpenPositions", () => api.getOpenPositions());
+    await runTest("getOpenOrders", () => api.getOpenOrders());
+    await runTest("getRecentOrders", () => api.getRecentOrders(TRADEABLE_SYMBOL));
+    await runTest("getFills", () => api.getFills());
+    await runTest("getAccountLog", () => api.getAccountLog());
+    await runTest("getTransfers", () => api.getTransfers());
+    await runTest("getNotifications", () => api.getNotifications());
+
+    const sendOrderResult = await runTest("sendOrder", () => api.sendOrder({
+        orderType: 'lmt', symbol: TRADEABLE_SYMBOL, side: 'buy', size: 1, limitPrice: 1000.0
+    }));
+
+    if (sendOrderResult && sendOrderResult.sendStatus && sendOrderResult.sendStatus.status === 'placed') {
+        testOrderId = sendOrderResult.sendStatus.order_id;
+        fs.appendFileSync(LOG_FILE, `\nCaptured order ID for subsequent tests: ${testOrderId}\n`);
+
+        await runTest("editOrder", () => api.editOrder({ orderId: testOrderId, size: 2, limitPrice: 1001.0 }));
+        await runTest("cancelOrder", () => api.cancelOrder({ order_id: testOrderId }));
+    } else {
+        const warning = "\nSkipping editOrder and cancelOrder tests because sendOrder did not return a valid order ID.\n";
+        console.warn(warning);
+        fs.appendFileSync(LOG_FILE, warning);
+    }
+
+    await runTest("batchOrder", () => api.batchOrder({
+        "batchOrder": [{ "order": "send", "order_tag": "1", "orderType": "lmt", "symbol": TRADEABLE_SYMBOL, "side": "buy", "size": 1, "limitPrice": 1002.0 }]
+    }));
+    
+    await runTest("cancelAllOrders", () => api.cancelAllOrders(TRADEABLE_SYMBOL));
+    await runTest("cancelAllOrdersAfter", () => api.cancelAllOrdersAfter(60));
+
+    const endTime = new Date().toISOString();
+    const finalMessage = `\nComprehensive test run finished at: ${endTime}\n`;
+    fs.appendFileSync(LOG_FILE, finalMessage);
+    console.log(`\nTest run finished. All results are in ${LOG_FILE}.`);
 }
 
 main();
