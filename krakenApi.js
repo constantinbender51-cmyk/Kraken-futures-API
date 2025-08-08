@@ -27,30 +27,30 @@ class KrakenFuturesApi {
     async request(method, endpoint, params = {}) {
         const url = this.baseUrl + endpoint;
         const nonce = this.createNonce();
-        let headers = { 'APIKey': this.apiKey, 'Nonce': nonce };
-        let requestConfig = { method, url, headers };
-        
-        if (method === 'GET') {
-            // Following the logic of your working example for GET requests.
-            // The signature for GET is always created with an empty string.
-            const authent = this.signRequest(endpoint, nonce, '');
-            headers['Authent'] = authent;
-            // The Content-Type header is included, as in your working code.
-            headers['Content-Type'] = 'application/json';
+        let postData = '';
+        let headers = {
+            'APIKey': this.apiKey,
+            'Nonce': nonce
+        };
 
-            // Append params to URL if they exist.
-            const queryString = qs.stringify(params);
-            if (queryString) {
-                requestConfig.url += '?' + queryString;
-            }
-
-        } else { // POST
-            // For POST, the signature is created from the URL-encoded body.
-            const postData = qs.stringify(params);
-            const authent = this.signRequest(endpoint, nonce, postData);
-            headers['Authent'] = authent;
+        // Determine postData and Content-Type based on method
+        if (method === 'POST') {
+            postData = qs.stringify(params);
             headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        } else { // GET
+            // As confirmed by your working code, Content-Type is included for GET
+            headers['Content-Type'] = 'application/json';
+            // For GET requests, the signature uses an empty string for postData
+        }
+        
+        // The signature is created with the correct postData string (empty for GET, encoded for POST)
+        headers['Authent'] = this.signRequest(endpoint, nonce, postData);
+
+        const requestConfig = { method, url, headers };
+        if (method === 'POST') {
             requestConfig.data = postData;
+        } else if (Object.keys(params).length > 0) {
+            requestConfig.url += '?' + qs.stringify(params);
         }
 
         try {
@@ -62,62 +62,49 @@ class KrakenFuturesApi {
             throw { endpoint: `${method} ${endpoint}`, error: errorMessage };
         }
     }
-
-    // Public endpoints don't need signing, so we can make a simpler request.
-    async publicRequest(endpoint, params = {}) {
-        let url = this.baseUrl + endpoint;
-        const queryString = qs.stringify(params);
-        if (queryString) {
-            url += '?' + queryString;
-        }
-        try {
-            const response = await axios.get(url);
-            return response.data;
-        } catch (error) {
-            // ... error handling ...
-        }
-    }
-
+    
     // --- Public API Methods ---
-    getInstruments = () => this.publicRequest('/derivatives/api/v3/instruments');
-    getTickers = () => this.publicRequest('/derivatives/api/v3/tickers');
-    getOrderbook = (symbol) => this.publicRequest('/derivatives/api/v3/orderbook', { symbol });
-    getHistory = (symbol, lastTime) => this.publicRequest('/derivatives/api/v3/history', { symbol, lastTime });
-
+    getInstruments = () => this.request('GET', '/derivatives/api/v3/instruments');
+    getTickers = () => this.request('GET', '/derivatives/api/v3/tickers');
+    
     // --- Private API Methods ---
     getAccounts = () => this.request('GET', '/derivatives/api/v3/accounts');
     getOpenPositions = () => this.request('GET', '/derivatives/api/v3/openpositions');
     sendOrder = (params) => this.request('POST', '/derivatives/api/v3/sendorder', params);
-    // ... other private methods ...
+    cancelOrder = (params) => this.request('POST', '/derivatives/api/v3/cancelorder', params);
+    // ... add all other API functions here following the same pattern
 }
 
 // --- Main Execution ---
 async function main() {
     // Replace with your actual, working API credentials
     const KRAKEN_API_KEY = '2J/amVE61y0K0k34qVduE2fSiQTMpppw6Y+K+b+qt9zk7o+UvtBQTwBq';
-    const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU1jJwHK14LqFJq1T3FRj1Pdj/kk8zuhRiUJi';
+const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU1jJwHK14LqFJq1T3FRj1Pdj/kk8zuhRiUJi';
+    if (KRAKEN_API_KEY === 'YOUR_API_KEY') {
+        console.log("Please add your API credentials to run the example.");
+        return;
+    }
 
     const api = new KrakenFuturesApi(KRAKEN_API_KEY, KRAKEN_API_SECRET);
 
     try {
-        console.log("Fetching open positions using the class method...");
+        console.log("--- Testing GET Request ---");
         const positions = await api.getOpenPositions();
-        console.log("Success! Response:", JSON.stringify(positions, null, 2));
+        console.log("getOpenPositions Success! Response:", JSON.stringify(positions, null, 2));
 
-        console.log("\nSending a test order...");
+        console.log("\n--- Testing POST Request ---");
+        // As you discovered, using a tradeable symbol like 'pf_xbtusd' is the key.
         const orderParams = {
             orderType: 'lmt',
-            symbol: 'pi_xbtusd',
+            symbol: 'pf_xbtusd', // Using the correct, tradeable symbol
             side: 'buy',
             size: 1,
             limitPrice: 1000.0
         };
         const orderResult = await api.sendOrder(orderParams);
-        console.log("Order placement result:", JSON.stringify(orderResult, null, 2));
-        // This is expected to fail with an insufficient funds error, not an auth error.
+        console.log("sendOrder Success! Response:", JSON.stringify(orderResult, null, 2));
 
     } catch (e) {
-        // Errors are already logged in the request method.
         console.log("\nExecution halted due to an error.");
     }
 }
