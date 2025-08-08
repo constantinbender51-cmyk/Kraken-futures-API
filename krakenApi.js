@@ -286,7 +286,12 @@ async runDecisionCycle() {
     // 2. *** USE THE NEW SUMMARIZER ***
     // This creates a much smaller, more focused data object for the prompt.
     const marketData = this.summarizeMarketData({
-        accounts, openPositions, openOrders, tickers, orderBookData, historyData
+        accounts,
+        openPositions,
+        openOrders,
+        tickers,
+        orderBookData,
+        historyData
     });
 
     // 3. Construct the prompt and get AI decision
