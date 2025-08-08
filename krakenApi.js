@@ -134,6 +134,63 @@ getHistory = (symbol, lastTime) => {
     batchOrder = (batchJson) => this.request('POST', '/derivatives/api/v3/batchorder', { json: JSON.stringify(batchJson) }, true);
     getTransfers = (lastTransferTime) => this.request('GET', '/derivatives/api/v3/transfers', { lastTransferTime }, true);
     getNotifications = () => this.request('GET', '/derivatives/api/v3/notifications', {}, true);
+    // Add this new method inside your TradingBot class.
+
+summarizeMarketData(rawData) {
+    const { accounts, openPositions, openOrders, tickers, orderBookData, historyData } = rawData;
+
+    // 1. Summarize Account Info: The AI only needs to know its buying power.
+    // The raw 'accounts' object is huge. We only need a few values.
+    const summarizedAccounts = {
+        currency: "USD", // Assuming a USD-based portfolio
+        cashBalance: accounts?.accounts?.cash?.['USD']?.balance || 0,
+        marginBalance: accounts?.accounts?.margin?.['USD']?.balance || 0,
+        availableMargin: accounts?.accounts?.margin?.['USD']?.availableMargin || 0,
+        unrealisedPnl: openPositions?.openPositions?.reduce((sum, p) => sum + (p.unrealisedPnl || 0), 0) || 0
+    };
+
+    // 2. Summarize Open Positions: The AI needs to know what it's currently holding.
+    // We don't need every single field.
+    const summarizedPositions = openPositions?.openPositions?.map(p => ({
+        symbol: p.symbol,
+        side: p.side,
+        size: p.size,
+        entryPrice: p.price,
+        unrealisedPnl: p.unrealisedPnl
+    })) || [];
+
+    // 3. Summarize Open Orders: The AI needs to know what orders are waiting to be filled.
+    const summarizedOrders = openOrders?.orders?.map(o => ({
+        orderId: o.orderId,
+        symbol: o.symbol,
+        side: o.side,
+        type: o.orderType,
+        size: o.size,
+        limitPrice: o.limitPrice,
+        status: o.status
+    })) || [];
+
+    // 4. Process the rest of the data (which is already quite lean)
+    const ticker = tickers?.tickers?.find(t => t.symbol === this.symbol) || null;
+    const orderBook = (orderBookData?.bids && orderBookData?.asks)
+        ? {
+            bids: orderBookData.bids.slice(0, 5), // Keep slicing to top 5
+            asks: orderBookData.asks.slice(0, 5)
+          }
+        : null;
+    const history = historyData?.history?.slice(0, 10) || null; // Keep slicing to last 10
+
+    // 5. Return the final, compact object
+    return {
+        accounts: summarizedAccounts,
+        openPositions: summarizedPositions,
+        openOrders: summarizedOrders,
+        ticker,
+        orderBook,
+        history
+    };
+}
+    
 }
 
 
@@ -204,20 +261,15 @@ ${this.formatHistory()}
 Based on the session history and the latest data, what is the next logical action? Return your command as a JSON object.
 `;
     }
-// Replace the entire runDecisionCycle method in your TradingBot class with this one.
+// In TradingBot class, REPLACE the old runDecisionCycle with this updated version.
 
 async runDecisionCycle() {
     console.log(`\n--- [${new Date().toLocaleTimeString()}] Starting new decision cycle ---`);
 
-    // 1. Gather all necessary data with individual error handling
+    // 1. Gather all necessary data (this part remains the same)
     console.log("Fetching latest market and account data...");
     const [
-        accounts,
-        openPositions,
-        openOrders,
-        tickers,
-        orderBookData,
-        historyData
+        accounts, openPositions, openOrders, tickers, orderBookData, historyData
     ] = await Promise.all([
         this.api.getAccounts().catch(e => { console.error("Error fetching accounts:", e); return null; }),
         this.api.getOpenPositions().catch(e => { console.error("Error fetching open positions:", e); return null; }),
@@ -227,26 +279,16 @@ async runDecisionCycle() {
         this.api.getHistory(this.symbol).catch(e => { console.error(`Error fetching history for ${this.symbol}:`, e); return null; })
     ]);
 
-    // Critical data check: If we don't have account info, we can't proceed.
     if (!accounts) {
         console.error("Could not fetch essential account data. Skipping this cycle.");
         return;
     }
 
-    // 2. Safely construct the marketData object
-    const marketData = {
-        accounts,
-        openPositions: openPositions || { openPositions: [] }, // Provide a default empty structure
-        openOrders: openOrders || { orders: [] },             // Provide a default empty structure
-        ticker: tickers?.tickers?.find(t => t.symbol === this.symbol) || null, // Use optional chaining
-        orderBook: (orderBookData?.bids && orderBookData?.asks)
-            ? {
-                bids: orderBookData.bids.slice(0, 5),
-                asks: orderBookData.asks.slice(0, 5)
-              }
-            : null, // If orderBookData is null or malformed, send null to the AI
-        history: historyData?.history?.slice(0, 10) || null // Use optional chaining and provide null fallback
-    };
+    // 2. *** USE THE NEW SUMMARIZER ***
+    // This creates a much smaller, more focused data object for the prompt.
+    const marketData = this.summarizeMarketData({
+        accounts, openPositions, openOrders, tickers, orderBookData, historyData
+    });
 
     // 3. Construct the prompt and get AI decision
     console.log("Constructing prompt and querying AI...");
