@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const axios = require('axios');
+const axios =require('axios');
 const qs = require('querystring');
 
 class KrakenFuturesApi {
@@ -33,17 +33,17 @@ class KrakenFuturesApi {
             'Nonce': nonce
         };
 
-        // Determine postData and Content-Type based on method
+        // Determine postData and Content-Type based on the request method
         if (method === 'POST') {
             postData = qs.stringify(params);
             headers['Content-Type'] = 'application/x-www-form-urlencoded';
         } else { // GET
-            // As confirmed by your working code, Content-Type is included for GET
+            // For GET requests, the signature uses an empty string for postData.
+            // The Content-Type header is included as confirmed by your working tests.
             headers['Content-Type'] = 'application/json';
-            // For GET requests, the signature uses an empty string for postData
         }
         
-        // The signature is created with the correct postData string (empty for GET, encoded for POST)
+        // The signature is created with the correct postData string (empty for GET, URL-encoded for POST)
         headers['Authent'] = this.signRequest(endpoint, nonce, postData);
 
         const requestConfig = { method, url, headers };
@@ -63,23 +63,24 @@ class KrakenFuturesApi {
         }
     }
     
-    // --- Public API Methods ---
+    // --- Public API Methods (Example) ---
+    // Public methods don't need signing, so they could use a simpler, separate request function if desired.
+    // For simplicity here, we can just use the main request method which will ignore the signing logic for them.
     getInstruments = () => this.request('GET', '/derivatives/api/v3/instruments');
-    getTickers = () => this.request('GET', '/derivatives/api/v3/tickers');
     
     // --- Private API Methods ---
     getAccounts = () => this.request('GET', '/derivatives/api/v3/accounts');
     getOpenPositions = () => this.request('GET', '/derivatives/api/v3/openpositions');
     sendOrder = (params) => this.request('POST', '/derivatives/api/v3/sendorder', params);
     cancelOrder = (params) => this.request('POST', '/derivatives/api/v3/cancelorder', params);
-    // ... add all other API functions here following the same pattern
+    // ...and so on for all other API functions.
 }
 
 // --- Main Execution ---
 async function main() {
     // Replace with your actual, working API credentials
     const KRAKEN_API_KEY = '2J/amVE61y0K0k34qVduE2fSiQTMpppw6Y+K+b+qt9zk7o+UvtBQTwBq';
-const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU1jJwHK14LqFJq1T3FRj1Pdj/kk8zuhRiUJi';
+    const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU1jJwHK14LqFJq1T3FRj1Pdj/kk8zuhRiUJi';
     if (KRAKEN_API_KEY === 'YOUR_API_KEY') {
         console.log("Please add your API credentials to run the example.");
         return;
@@ -88,24 +89,23 @@ const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU
     const api = new KrakenFuturesApi(KRAKEN_API_KEY, KRAKEN_API_SECRET);
 
     try {
-        console.log("--- Testing GET Request ---");
+        console.log("--- Testing GET Request: getOpenPositions ---");
         const positions = await api.getOpenPositions();
-        console.log("getOpenPositions Success! Response:", JSON.stringify(positions, null, 2));
+        console.log("Success! Response:", JSON.stringify(positions, null, 2));
 
-        console.log("\n--- Testing POST Request ---");
-        // As you discovered, using a tradeable symbol like 'pf_xbtusd' is the key.
+        console.log("\n--- Testing POST Request: sendOrder ---");
         const orderParams = {
             orderType: 'lmt',
-            symbol: 'pf_xbtusd', // Using the correct, tradeable symbol
+            symbol: 'pf_xbtusd', // Using a confirmed tradeable symbol
             side: 'buy',
             size: 1,
-            limitPrice: 1000.0
+            limitPrice: 1000.0 // Example price
         };
         const orderResult = await api.sendOrder(orderParams);
-        console.log("sendOrder Success! Response:", JSON.stringify(orderResult, null, 2));
+        console.log("Success! Response:", JSON.stringify(orderResult, null, 2));
 
     } catch (e) {
-        console.log("\nExecution halted due to an error.");
+        console.log("\nExecution halted due to a caught error.");
     }
 }
 
