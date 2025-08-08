@@ -108,7 +108,15 @@ class KrakenFuturesApi {
     getInstruments = () => this.request('GET', '/derivatives/api/v3/instruments');
     getTickers = () => this.request('GET', '/derivatives/api/v3/tickers');
     getOrderbook = (symbol) => this.request('GET', '/derivatives/api/v3/orderbook', { symbol });
-    getHistory = (symbol, lastTime) => this.request('GET', '/derivatives/api/v3/history', { symbol, lastTime });
+    // CORRECTED LINE
+getHistory = (symbol, lastTime) => {
+    const params = { symbol };
+    if (lastTime) {
+        params.lastTime = lastTime;
+    }
+    return this.request('GET', '/derivatives/api/v3/history', params);
+}
+    
     getAccounts = () => this.request('GET', '/derivatives/api/v3/accounts', {}, true);
     getOpenPositions = () => this.request('GET', '/derivatives/api/v3/openpositions', {}, true);
     getOpenOrders = () => this.request('GET', '/derivatives/api/v3/openorders', {}, true);
