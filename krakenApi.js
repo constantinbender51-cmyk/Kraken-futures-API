@@ -135,61 +135,6 @@ getHistory = (symbol, lastTime) => {
     getTransfers = (lastTransferTime) => this.request('GET', '/derivatives/api/v3/transfers', { lastTransferTime }, true);
     getNotifications = () => this.request('GET', '/derivatives/api/v3/notifications', {}, true);
     // Add this new method inside your TradingBot class.
-
-summarizeMarketData(rawData) {
-    const { accounts, openPositions, openOrders, tickers, orderBookData, historyData } = rawData;
-
-    // 1. Summarize Account Info: The AI only needs to know its buying power.
-    // The raw 'accounts' object is huge. We only need a few values.
-    const summarizedAccounts = {
-        currency: "USD", // Assuming a USD-based portfolio
-        cashBalance: accounts?.accounts?.cash?.['USD']?.balance || 0,
-        marginBalance: accounts?.accounts?.margin?.['USD']?.balance || 0,
-        availableMargin: accounts?.accounts?.margin?.['USD']?.availableMargin || 0,
-        unrealisedPnl: openPositions?.openPositions?.reduce((sum, p) => sum + (p.unrealisedPnl || 0), 0) || 0
-    };
-
-    // 2. Summarize Open Positions: The AI needs to know what it's currently holding.
-    // We don't need every single field.
-    const summarizedPositions = openPositions?.openPositions?.map(p => ({
-        symbol: p.symbol,
-        side: p.side,
-        size: p.size,
-        entryPrice: p.price,
-        unrealisedPnl: p.unrealisedPnl
-    })) || [];
-
-    // 3. Summarize Open Orders: The AI needs to know what orders are waiting to be filled.
-    const summarizedOrders = openOrders?.orders?.map(o => ({
-        orderId: o.orderId,
-        symbol: o.symbol,
-        side: o.side,
-        type: o.orderType,
-        size: o.size,
-        limitPrice: o.limitPrice,
-        status: o.status
-    })) || [];
-
-    // 4. Process the rest of the data (which is already quite lean)
-    const ticker = tickers?.tickers?.find(t => t.symbol === this.symbol) || null;
-    const orderBook = (orderBookData?.bids && orderBookData?.asks)
-        ? {
-            bids: orderBookData.bids.slice(0, 5), // Keep slicing to top 5
-            asks: orderBookData.asks.slice(0, 5)
-          }
-        : null;
-    const history = historyData?.history?.slice(0, 10) || null; // Keep slicing to last 10
-
-    // 5. Return the final, compact object
-    return {
-        accounts: summarizedAccounts,
-        openPositions: summarizedPositions,
-        openOrders: summarizedOrders,
-        ticker,
-        orderBook,
-        history
-    };
-}
     
 }
 
@@ -261,6 +206,60 @@ ${this.formatHistory()}
 Based on the session history and the latest data, what is the next logical action? Return your command as a JSON object.
 `;
     }
+        const { accounts, openPositions, openOrders, tickers, orderBookData, historyData } = rawData;
+
+    // 1. Summarize Account Info: The AI only needs to know its buying power.
+    // The raw 'accounts' object is huge. We only need a few values.
+    summarizeMarketData(rawData) {
+        const summarizedAccounts = {
+        currency: "USD", // Assuming a USD-based portfolio
+        cashBalance: accounts?.accounts?.cash?.['USD']?.balance || 0,
+        marginBalance: accounts?.accounts?.margin?.['USD']?.balance || 0,
+        availableMargin: accounts?.accounts?.margin?.['USD']?.availableMargin || 0,
+        unrealisedPnl: openPositions?.openPositions?.reduce((sum, p) => sum + (p.unrealisedPnl || 0), 0) || 0
+    };
+
+    // 2. Summarize Open Positions: The AI needs to know what it's currently holding.
+    // We don't need every single field.
+    const summarizedPositions = openPositions?.openPositions?.map(p => ({
+        symbol: p.symbol,
+        side: p.side,
+        size: p.size,
+        entryPrice: p.price,
+        unrealisedPnl: p.unrealisedPnl
+    })) || [];
+
+    // 3. Summarize Open Orders: The AI needs to know what orders are waiting to be filled.
+    const summarizedOrders = openOrders?.orders?.map(o => ({
+        orderId: o.orderId,
+        symbol: o.symbol,
+        side: o.side,
+        type: o.orderType,
+        size: o.size,
+        limitPrice: o.limitPrice,
+        status: o.status
+    })) || [];
+
+    // 4. Process the rest of the data (which is already quite lean)
+    const ticker = tickers?.tickers?.find(t => t.symbol === this.symbol) || null;
+    const orderBook = (orderBookData?.bids && orderBookData?.asks)
+        ? {
+            bids: orderBookData.bids.slice(0, 5), // Keep slicing to top 5
+            asks: orderBookData.asks.slice(0, 5)
+          }
+        : null;
+    const history = historyData?.history?.slice(0, 10) || null; // Keep slicing to last 10
+
+    // 5. Return the final, compact object
+    return {
+        accounts: summarizedAccounts,
+        openPositions: summarizedPositions,
+        openOrders: summarizedOrders,
+        ticker,
+        orderBook,
+        history
+    };
+}
 // In TradingBot class, REPLACE the old runDecisionCycle with this updated version.
 
 async runDecisionCycle() {
