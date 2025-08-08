@@ -292,7 +292,19 @@ async runDecisionCycle() {
     // 5. Update conversation history
     this.conversationHistory.push({ command: decision, result: executionResult });
 }
-
+start() {
+        if (this.isRunning) {
+            console.log("Bot is already running.");
+            return;
+        }
+        console.log(`Starting trading bot for ${this.symbol}. Decision interval: ${this.interval / 1000}s.`);
+        this.isRunning = true;
+        // Run the first cycle immediately, then set the interval
+        this.runDecisionCycle().finally(() => {
+            setInterval(() => this.runDecisionCycle(), this.interval);
+        });
+    }
+} // <--- +++ THIS CLOSING BRACE WAS MISSING +++
 
 // #############################
 // ##      RUN THE BOT        ##
