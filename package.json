@@ -4,8 +4,8 @@
   "description": "A client for interacting with the Kraken Futures API.",
   "main": "krakenApi.js",
   "scripts": {
-    "start": "node krakenApi.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node testAllFunctions.js",
+    "test": "node testAllFunctions.js"
   },
   "author": "",
   "license": "ISC",
