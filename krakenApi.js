@@ -193,7 +193,10 @@ ${this.formatHistory()}
 Based on the session history and the latest data, what is the next logical action? Return your command as a JSON object.
 `;
     }
+async runDecisionCycle() {
+        console.log(`\n--- [${new Date().toLocaleTimeString()}] Starting new decision cycle ---`);
 
+        // 1. Gather all necessary data
 // In TradingBot.runDecisionCycle
 console.log("Fetching latest market and account data...");
 const [accounts, openPositions, openOrders, tickers, orderBookData, historyData] = await Promise.all([
