@@ -7,20 +7,17 @@
     "start": "node krakenApi.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "querystring": "^0.2.1"
+  },
   "keywords": [
     "kraken",
     "futures",
     "crypto",
     "api",
-    "client",
-    "trading"
-  ],
-  "author": "Your Name",
-  "license": "ISC",
-  "dependencies": {
-    "axios": "^1.7.2"
-  },
-  "engines": {
-    "node": ">=14.0.0"
-  }
+    "client"
+  ]
 }
