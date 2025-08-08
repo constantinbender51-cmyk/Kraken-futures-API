@@ -108,7 +108,18 @@ class KrakenFuturesApi {
     getInstruments = () => this.request('GET', '/derivatives/api/v3/instruments');
     getTickers = () => this.request('GET', '/derivatives/api/v3/tickers');
     getOrderbook = (symbol) => this.request('GET', '/derivatives/api/v3/orderbook', { symbol });
-    getHistory = (symbol, lastTime) => this.request('GET', '/derivatives/api/v3/history', { symbol, lastTime });
+    // In KrakenFuturesApi class
+// REPLACE the old getHistory method with this one.
+getHistory = (symbol, lastTime) => {
+    const params = { symbol }; // Start with the mandatory symbol
+    if (lastTime) {
+        // Only add lastTime to the parameters if it has a value
+        params.lastTime = lastTime;
+    }
+    // Now, params will be either { symbol: '...' } or { symbol: '...', lastTime: '...' }
+    // This prevents any undefined values from being sent.
+    return this.request('GET', '/derivatives/api/v3/history', params);
+}
     getAccounts = () => this.request('GET', '/derivatives/api/v3/accounts', {}, true);
     getOpenPositions = () => this.request('GET', '/derivatives/api/v3/openpositions', {}, true);
     getOpenOrders = () => this.request('GET', '/derivatives/api/v3/openorders', {}, true);
