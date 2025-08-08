@@ -1,59 +1,10 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const qs = require('querystring');
+const qs =require('querystring');
+const fs = require('fs'); // Import the File System module
 
-// #############################
-// ## DeepSeek API Caller ##
-// #############################
-// Configuration
-const DEEPSEEK_API_KEY = 'sk-ae85860567f8462b95e774393dfb5dc3'; // <-- IMPORTANT: Replace with your key
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
-async function callDeepSeekAPI(prompt) {
-    if (DEEPSEEK_API_KEY === 'YOUR_DEEPSEEK_API_KEY') {
-        console.error("FATAL: DeepSeek API key is not set.");
-        // Return a "doNothing" command to prevent crashes in a live loop.
-        return JSON.stringify({ function: "doNothing", parameters: { reason: "AI not configured" } });
-    }
-    try {
-        const response = await fetch(DEEPSEEK_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: 'deepseek-chat',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.5, // Lower temperature for more deterministic, safer trading decisions
-                max_tokens: 1024
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}`);
-        }
-
-        const data = await response.json();
-        // Extracting only the JSON part, assuming the AI returns it in a code block or similar
-        const content = data.choices[0].message.content;
-        const jsonMatch = content.match(/```json\n([\s\S]*?)\n```|({[\s\S]*})/);
-        if (jsonMatch) {
-            return jsonMatch[1] || jsonMatch[2];
-        }
-        return content; // Fallback to returning the raw content
-    } catch (error) {
-        console.error('Error calling DeepSeek API:', error);
-        return null;
-    }
-}
-
-
-// #############################
-// ## Kraken Futures API Class ##
-// #############################
+// --- Paste the complete KrakenFuturesApi class here ---
 class KrakenFuturesApi {
-    // ... (The full class from your original code goes here) ...
     constructor(apiKey, apiSecret, baseUrl = 'https://futures.kraken.com') {
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
@@ -101,6 +52,7 @@ class KrakenFuturesApi {
             return response.data;
         } catch (error) {
             const errorMessage = error.response ? error.response.data : error.message;
+            // We still log errors to the console for immediate visibility
             console.error(`Error with ${method} ${endpoint}:`, JSON.stringify(errorMessage, null, 2));
             throw { endpoint: `${method} ${endpoint}`, error: errorMessage };
         }
@@ -108,18 +60,7 @@ class KrakenFuturesApi {
     getInstruments = () => this.request('GET', '/derivatives/api/v3/instruments');
     getTickers = () => this.request('GET', '/derivatives/api/v3/tickers');
     getOrderbook = (symbol) => this.request('GET', '/derivatives/api/v3/orderbook', { symbol });
-    // In KrakenFuturesApi class
-// REPLACE the old getHistory method with this one.
-getHistory = (symbol, lastTime) => {
-    const params = { symbol }; // Start with the mandatory symbol
-    if (lastTime) {
-        // Only add lastTime to the parameters if it has a value
-        params.lastTime = lastTime;
-    }
-    // Now, params will be either { symbol: '...' } or { symbol: '...', lastTime: '...' }
-    // This prevents any undefined values from being sent.
-    return this.request('GET', '/derivatives/api/v3/history', params);
-}
+    getHistory = (symbol, lastTime) => this.request('GET', '/derivatives/api/v3/history', { symbol, lastTime });
     getAccounts = () => this.request('GET', '/derivatives/api/v3/accounts', {}, true);
     getOpenPositions = () => this.request('GET', '/derivatives/api/v3/openpositions', {}, true);
     getOpenOrders = () => this.request('GET', '/derivatives/api/v3/openorders', {}, true);
@@ -134,87 +75,96 @@ getHistory = (symbol, lastTime) => {
     batchOrder = (batchJson) => this.request('POST', '/derivatives/api/v3/batchorder', { json: JSON.stringify(batchJson) }, true);
     getTransfers = (lastTransferTime) => this.request('GET', '/derivatives/api/v3/transfers', { lastTransferTime }, true);
     getNotifications = () => this.request('GET', '/derivatives/api/v3/notifications', {}, true);
-    // Add this new method inside your TradingBot class.
-    
 }
 
 
-// #############################
-// ## The Main Trading Loop ##
-// #############################
+// #########################################
+// ## Comprehensive Test Runner with File Logging ##
+// #########################################
 
-class TradingBot {
-    constructor(apiKey, apiSecret, symbol, interval = 30000) {
-        this.api = new KrakenFuturesApi(apiKey, apiSecret);
-        this.symbol = symbol;
-        this.interval = interval; // Time in ms between decisions
-        this.conversationHistory = []; // Stores the AI's decisions and results
-        this.isRunning = false;
+async function main() {
+    // --- Configuration ---
+    const KRAKEN_API_KEY = '2J/amVE61y0K0k34qVduE2fSiQTMpppw6Y+K+b+qt9zk7o+UvtBQTwBq';
+    const KRAKEN_API_SECRET = '6CEQlIa0+YrlxBXWAfdvkpcCpVK3UT5Yidpg/o/36f60WWETLU1bU1jJwHK14LqFJq1T3FRj1Pdj/kk8zuhRiUJi';
+    const TRADEABLE_SYMBOL = 'pf_xbtusd';
+    const LOG_FILE = 'test-run-results.log'; // The file to write results to
+
+    if (KRAKEN_API_KEY === 'YOUR_API_KEY' || KRAKEN_API_SECRET === 'YOUR_API_SECRET') {
+        console.error("FATAL: Please replace 'YOUR_API_KEY' and 'YOUR_API_SECRET' in the script.");
+        return;
     }
 
-    // Helper to format the conversation history for the prompt
-    formatHistory() {
-        if (this.conversationHistory.length === 0) {
-            return "This is the first decision in the session.";
+    // --- Initialize Log File ---
+    const startTime = new Date().toISOString();
+    fs.writeFileSync(LOG_FILE, `Comprehensive API Test Run - Started at: ${startTime}\n`);
+    console.log(`Test results will be written to ${LOG_FILE}`);
+
+    const api = new KrakenFuturesApi(KRAKEN_API_KEY, KRAKEN_API_SECRET);
+    let testOrderId = null;
+
+    // --- Helper function to run and log each test to a file ---
+    const runTest = async (name, fn) => {
+        const separator = '--------------------------------------------------\n';
+        let logContent = `${separator}--- Running test: ${name} ---\n${separator}`;
+        console.log(`Running test: ${name}...`); // Keep console output minimal
+
+        try {
+            const result = await fn();
+            logContent += `Success! Result:\n${JSON.stringify(result, null, 2)}\n\n`;
+            fs.appendFileSync(LOG_FILE, logContent);
+            return result;
+        } catch (e) {
+            logContent += `FAILED! Error:\n${JSON.stringify(e, null, 2)}\n\n`;
+            fs.appendFileSync(LOG_FILE, logContent);
+            console.error(`--- Test FAILED: ${name} (see ${LOG_FILE} for details) ---`);
         }
-        return this.conversationHistory.map(turn =>
-            `AI Command: ${JSON.stringify(turn.command)}\nExecution Result: ${JSON.stringify(turn.result)}`
-        ).join('\n\n');
+    };
+
+    // --- Execute All Tests ---
+    await runTest("getInstruments", () => api.getInstruments());
+    await runTest("getTickers", () => api.getTickers());
+    await runTest("getOrderbook", () => api.getOrderbook(TRADEABLE_SYMBOL));
+    await runTest("getHistory", () => api.getHistory(TRADEABLE_SYMBOL));
+    await runTest("getAccounts", () => api.getAccounts());
+    await runTest("getOpenPositions", () => api.getOpenPositions());
+    await runTest("getOpenOrders", () => api.getOpenOrders());
+    await runTest("getRecentOrders", () => api.getRecentOrders(TRADEABLE_SYMBOL));
+    await runTest("getFills", () => api.getFills());
+    await runTest("getAccountLog", () => api.getAccountLog());
+    await runTest("getTransfers", () => api.getTransfers());
+    await runTest("getNotifications", () => api.getNotifications());
+
+    const sendOrderResult = await runTest("sendOrder", () => api.sendOrder({
+        orderType: 'lmt', symbol: TRADEABLE_SYMBOL, side: 'buy', size: 1, limitPrice: 1000.0
+    }));
+
+    if (sendOrderResult && sendOrderResult.sendStatus && sendOrderResult.sendStatus.status === 'placed') {
+        testOrderId = sendOrderResult.sendStatus.order_id;
+        fs.appendFileSync(LOG_FILE, `\nCaptured order ID for subsequent tests: ${testOrderId}\n`);
+
+        await runTest("editOrder", () => api.editOrder({ orderId: testOrderId, size: 2, limitPrice: 1001.0 }));
+        await runTest("cancelOrder", () => api.cancelOrder({ order_id: testOrderId }));
+    } else {
+        const warning = "\nSkipping editOrder and cancelOrder tests because sendOrder did not return a valid order ID.\n";
+        console.warn(warning);
+        fs.appendFileSync(LOG_FILE, warning);
     }
 
-    // The main prompt sent to the AI
-    constructPrompt(marketData) {
-        return `
-You are an expert crypto trading AI. Your primary objective is to strategically manage a futures trading portfolio on Kraken Futures to maximize its growth.
+    await runTest("batchOrder", () => api.batchOrder({
+        "batchOrder": [{ "order": "send", "order_tag": "1", "orderType": "lmt", "symbol": TRADEABLE_SYMBOL, "side": "buy", "size": 1, "limitPrice": 1002.0 }]
+    }));
+    
+    await runTest("cancelAllOrders", () => api.cancelAllOrders(TRADEABLE_SYMBOL));
+    await runTest("cancelAllOrdersAfter", () => api.cancelAllOrdersAfter(60));
 
-You will be given the complete conversation history from this session, including your previous commands and their execution results. You will also receive fresh, real-time market data.
+    const endTime = new Date().toISOString();
+    const finalMessage = `\nComprehensive test run finished at: ${endTime}\n`;
+    fs.appendFileSync(LOG_FILE, finalMessage);
+    console.log(`\nTest run finished. All results are in ${LOG_FILE}.`);
+}
 
-Analyze all this information and decide on the single best action to take right now. Return your decision as a single, clean JSON object with no other text or explanation.
-
-<AVAILABLE_ACTIONS>
-- sendOrder: { "orderType": "lmt" | "mkt", "symbol": "${this.symbol}", "side": "buy" | "sell", "size": integer, "limitPrice": float }
-- editOrder: { "orderId": "string", "size": integer, "limitPrice": float }
-- cancelOrder: { "order_id": "string" }
-- cancelAllOrders: { "symbol": "${this.symbol}" }
-- doNothing: { "reason": "string" } // Use this if no action is warranted.
-</AVAILABLE_ACTIONS>
-
----
-**SESSION HISTORY (Your Previous Actions and Their Results):**
-${this.formatHistory()}
-
----
-**CURRENT MARKET AND ACCOUNT DATA (as of ${new Date().toISOString()}):**
-
-1. Account Balances:
-   ${JSON.stringify(marketData.accounts)}
-
-2. Current Open Positions:
-   ${JSON.stringify(marketData.openPositions)}
-
-3. Current Open Orders:
-   ${JSON.stringify(marketData.openOrders)}
-
-4. Market Data for Symbol (${this.symbol}):
-   - Ticker: ${JSON.stringify(marketData.ticker)}
-   - Order Book (Top 5 Levels): ${JSON.stringify(marketData.orderBook)}
-   - Recent Trades (Last 10): ${JSON.stringify(marketData.history)}
-
----
-**YOUR TASK:**
-
-Based on the session history and the latest data, what is the next logical action? Return your command as a JSON object.
-`;
-    }
-        const { accounts, openPositions, openOrders, tickers, orderBookData, historyData } = rawData;
-
-    // 1. Summarize Account Info: The AI only needs to know its buying power.
-    // The raw 'accounts' object is huge. We only need a few values.
-    summarizeMarketData(rawData) {
-        const summarizedAccounts = {
-        currency: "USD", // Assuming a USD-based portfolio
-        cashBalance: accounts?.accounts?.cash?.['USD']?.balance || 0,
-        marginBalance: accounts?.accounts?.margin?.['USD']?.balance || 0,
+main();
+0,
         availableMargin: accounts?.accounts?.margin?.['USD']?.availableMargin || 0,
         unrealisedPnl: openPositions?.openPositions?.reduce((sum, p) => sum + (p.unrealisedPnl || 0), 0) || 0
     };
