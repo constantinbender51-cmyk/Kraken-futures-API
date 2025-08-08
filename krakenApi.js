@@ -195,4 +195,10 @@ async function main() {
     }
 }
 
-main();
+// At the very end of krakenApi.js
+
+// This makes the class available as a named export.
+module.exports = {
+    KrakenFuturesApi
+};
+
