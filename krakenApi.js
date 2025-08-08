@@ -6,7 +6,7 @@ const qs = require('querystring');
 // ## DeepSeek API Caller ##
 // #############################
 // Configuration
-const DEEPSEEK_API_KEY = 'YOUR_DEEPSEEK_API_KEY'; // <-- IMPORTANT: Replace with your key
+const DEEPSEEK_API_KEY = 'sk-ae85860567f8462b95e774393dfb5dc3'; // <-- IMPORTANT: Replace with your key
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 async function callDeepSeekAPI(prompt) {
