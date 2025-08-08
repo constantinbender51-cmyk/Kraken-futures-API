@@ -110,12 +110,4 @@ async function main() {
 }
 
 main();
-le.error("FATAL: Please replace 'YOUR_KRAKEN_API_KEY' and 'YOUR_KRAKEN_API_SECRET' in the script.");
-        return;
-    }
 
-    const bot = new TradingBot(KRAKEN_API_KEY, KRAKEN_API_SECRET, TRADEABLE_SYMBOL, DECISION_INTERVAL_MS);
-    bot.start();
-}
-
-main();
