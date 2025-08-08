@@ -193,46 +193,104 @@ ${this.formatHistory()}
 Based on the session history and the latest data, what is the next logical action? Return your command as a JSON object.
 `;
     }
+// Replace the entire runDecisionCycle method in your TradingBot class with this one.
+
 async runDecisionCycle() {
-        console.log(`\n--- [${new Date().toLocaleTimeString()}] Starting new decision cycle ---`);
+    console.log(`\n--- [${new Date().toLocaleTimeString()}] Starting new decision cycle ---`);
 
-        // 1. Gather all necessary data
-// In TradingBot.runDecisionCycle
-console.log("Fetching latest market and account data...");
-const [accounts, openPositions, openOrders, tickers, orderBookData, historyData] = await Promise.all([
-    this.api.getAccounts(),
-    this.api.getOpenPositions(),
-    this.api.getOpenOrders(),
-    this.api.getTickers(),
-    this.api.getOrderbook(this.symbol), // <--- If this fails...
-    this.api.getHistory(this.symbol)
-]).catch(err => { // ...the .catch() block is executed immediately
-    console.error("Failed to fetch critical data. Skipping cycle.", err);
-    return []; // It returns an empty array: []
-});
+    // 1. Gather all necessary data with individual error handling
+    console.log("Fetching latest market and account data...");
+    const [
+        accounts,
+        openPositions,
+        openOrders,
+        tickers,
+        orderBookData,
+        historyData
+    ] = await Promise.all([
+        this.api.getAccounts().catch(e => { console.error("Error fetching accounts:", e); return null; }),
+        this.api.getOpenPositions().catch(e => { console.error("Error fetching open positions:", e); return null; }),
+        this.api.getOpenOrders().catch(e => { console.error("Error fetching open orders:", e); return null; }),
+        this.api.getTickers().catch(e => { console.error("Error fetching tickers:", e); return null; }),
+        this.api.getOrderbook(this.symbol).catch(e => { console.error(`Error fetching order book for ${this.symbol}:`, e); return null; }),
+        this.api.getHistory(this.symbol).catch(e => { console.error(`Error fetching history for ${this.symbol}:`, e); return null; })
+    ]);
 
-// Because it returned [], destructuring happens like this:
-// const accounts = [][0];      // undefined
-// const openPositions = [][1]; // undefined
-// ...
-// const orderBookData = [][4]; // undefined
-
-if (!accounts) return; // This check correctly stops the function.
-
+    // Critical data check: If we don't have account info, we can't proceed.
+    if (!accounts) {
+        console.error("Could not fetch essential account data. Skipping this cycle.");
+        return;
     }
 
-    start() {
-        if (this.isRunning) {
-            console.log("Bot is already running.");
-            return;
-        }
-        console.log(`Starting trading bot for ${this.symbol}. Decision interval: ${this.interval / 1000}s.`);
-        this.isRunning = true;
-        // Run the first cycle immediately, then set the interval
-        this.runDecisionCycle().finally(() => {
-            setInterval(() => this.runDecisionCycle(), this.interval);
+    // 2. Safely construct the marketData object
+    const marketData = {
+        accounts,
+        openPositions: openPositions || { openPositions: [] }, // Provide a default empty structure
+        openOrders: openOrders || { orders: [] },             // Provide a default empty structure
+        ticker: tickers?.tickers?.find(t => t.symbol === this.symbol) || null, // Use optional chaining
+        orderBook: (orderBookData?.bids && orderBookData?.asks)
+            ? {
+                bids: orderBookData.bids.slice(0, 5),
+                asks: orderBookData.asks.slice(0, 5)
+              }
+            : null, // If orderBookData is null or malformed, send null to the AI
+        history: historyData?.history?.slice(0, 10) || null // Use optional chaining and provide null fallback
+    };
+
+    // 3. Construct the prompt and get AI decision
+    console.log("Constructing prompt and querying AI...");
+    const prompt = this.constructPrompt(marketData);
+    const aiResponseString = await callDeepSeekAPI(prompt);
+
+    if (!aiResponseString) {
+        console.error("Failed to get a response from AI. Skipping cycle.");
+        return;
+    }
+
+    // 4. Parse and execute the decision (This part remains the same)
+    let decision;
+    try {
+        decision = JSON.parse(aiResponseString);
+    } catch (e) {
+        console.error("Failed to parse AI response into JSON. Response was:", aiResponseString);
+        this.conversationHistory.push({
+            command: { function: "parseError", parameters: {} },
+            result: { error: "Invalid JSON response from AI.", response: aiResponseString }
         });
+        return;
     }
+
+    console.log(`AI Decision: ${decision.function}`, decision.parameters || '');
+
+    let executionResult;
+    try {
+        switch (decision.function) {
+            case "sendOrder":
+                executionResult = await this.api.sendOrder(decision.parameters);
+                break;
+            case "editOrder":
+                executionResult = await this.api.editOrder(decision.parameters);
+                break;
+            case "cancelOrder":
+                executionResult = await this.api.cancelOrder(decision.parameters);
+                break;
+            case "cancelAllOrders":
+                executionResult = await this.api.cancelAllOrders(decision.parameters.symbol);
+                break;
+            case "doNothing":
+                executionResult = { status: "success", reason: decision.parameters.reason };
+                break;
+            default:
+                throw new Error(`Unknown function '${decision.function}' received from AI.`);
+        }
+        console.log("Execution Result:", executionResult);
+    } catch (error) {
+        console.error("Error executing AI command:", error);
+        executionResult = { status: "error", details: error };
+    }
+
+    // 5. Update conversation history
+    this.conversationHistory.push({ command: decision, result: executionResult });
 }
 
 
