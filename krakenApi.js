@@ -270,6 +270,10 @@ async runDecisionCycle() {
         });
         return;
     }
+    if (!decision) {
+        console.error("AI returned a null decision. Skipping cycle.");
+        return;
+    }
 
     console.log(`AI Decision: ${decision.function}`, decision.parameters || '');
 
