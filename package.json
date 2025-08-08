@@ -1,0 +1,26 @@
+{
+  "name": "kraken-futures-api-client",
+  "version": "1.0.0",
+  "description": "A client for interacting with the Kraken Futures API.",
+  "main": "krakenApi.js",
+  "scripts": {
+    "start": "node krakenApi.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "kraken",
+    "futures",
+    "crypto",
+    "api",
+    "client",
+    "trading"
+  ],
+  "author": "Your Name",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
